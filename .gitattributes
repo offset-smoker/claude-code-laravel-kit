@@ -1,0 +1,3 @@
+* text=auto eol=lf
+*.sh text eol=lf
+tests/Fixtures/app/artisan text eol=lf

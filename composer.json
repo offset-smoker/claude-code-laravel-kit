@@ -1,0 +1,61 @@
+{
+    "name": "offset-smoker/claude-code-laravel-kit",
+    "description": "Development tooling for the laravel-kit Claude Code plugin: the test harness, static analysis and code style for its gate scripts. The plugin itself installs through a Claude Code marketplace, not Composer.",
+    "license": "MIT",
+    "type": "project",
+    "keywords": [
+        "claude-code",
+        "claude-code-plugin",
+        "laravel",
+        "code-review",
+        "pre-commit",
+        "deploy"
+    ],
+    "authors": [
+        {
+            "name": "Brandon Wagner",
+            "email": "b@wagner.codes"
+        }
+    ],
+    "homepage": "https://github.com/offset-smoker/claude-code-laravel-kit",
+    "support": {
+        "issues": "https://github.com/offset-smoker/claude-code-laravel-kit/issues",
+        "source": "https://github.com/offset-smoker/claude-code-laravel-kit"
+    },
+    "require": {
+        "php": "^8.3"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.25",
+        "pestphp/pest": "^4.1",
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-strict-rules": "^2.0",
+        "symfony/process": "^7.3"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "OffsetSmoker\\LaravelKit\\": "src/",
+            "OffsetSmoker\\LaravelKit\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        },
+        "sort-packages": true,
+        "platform": {
+            "php": "8.3.0"
+        }
+    },
+    "scripts": {
+        "analyse": "phpstan analyse --memory-limit=1G --no-progress",
+        "format": "pint",
+        "lint": [
+            "pint --test",
+            "shellcheck scripts/*.sh"
+        ],
+        "test": "pest"
+    }
+}

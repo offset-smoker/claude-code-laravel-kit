@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck --version
+      - run: shellcheck -x scripts/*.sh
+
+  plugin:
+    name: claude plugin validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --global @anthropic-ai/claude-code
+      - run: claude plugin validate .
+
+  # The gate scripts are tested on both platforms they are written for:
+  # Linux with GNU tools and bash 5, macOS with BSD tools and bash 3.2.
+  tests:
+    name: PHP ${{ matrix.php }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        php: ['8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        uses: ramsey/composer-install@v3
+
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Check code style
+        run: vendor/bin/pint --test
+
+      - name: Static analysis (PHPStan level max, no baseline)
+        run: |
+          vendor/bin/phpstan clear-result-cache
+          vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+
+      - name: Tests
+        run: vendor/bin/pest --colors=never
+
+      - name: Dependency audit
+        run: composer audit

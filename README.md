@@ -179,9 +179,13 @@ on spaces, without shell quoting, so a path in a command must not contain a
 space.
 
 `.laravel-kit.conf` decides which commands run on every commit and push, so
-review changes to it the way you review CI configuration. The same goes for
-the repository's own `vendor/bin` tools, which the hook runs: only enable the
-plugin in repositories you trust.
+review changes to it the way you review CI configuration. Those commands,
+and the default `vendor/bin` tools, are the repository's own, and the hook
+runs them automatically whenever Claude attempts `git commit`, before any
+permission prompt. Only enable the plugin in repositories you trust: prefer
+`--scope project` in those repositories over a user-scope install, which
+applies to every repository you open. [SECURITY.md](SECURITY.md) sets out
+this trust model.
 
 To change the review checklist or the hook itself, fork this repository and
 edit `skills/review/SKILL.md` or `hooks/hooks.json`; then point

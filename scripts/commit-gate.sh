@@ -32,8 +32,13 @@ if [ -z "$target" ]; then
     exit 0
 fi
 
+# commit-target.php prints the directory, the mode, then one pathspec per line.
 directory=$(printf '%s\n' "$target" | sed -n 1p)
-includes_unstaged=$(printf '%s\n' "$target" | sed -n 2p)
+mode=$(printf '%s\n' "$target" | sed -n 2p)
+pathspecs=()
+while IFS= read -r pathspec; do
+    pathspecs+=("$pathspec")
+done < <(printf '%s\n' "$target" | sed -n '3,$p')
 
 if ! root=$(git -C "$directory" rev-parse --show-toplevel 2>/dev/null); then
     exit 0
@@ -52,11 +57,19 @@ if [ "$LK_FAST_GATE" = off ]; then
     exit 0
 fi
 
-if [ "$includes_unstaged" = 1 ]; then
-    output=$("$KIT_ROOT/scripts/fast-gate.sh" --include-unstaged "$root" 2>&1)
-else
-    output=$("$KIT_ROOT/scripts/fast-gate.sh" "$root" 2>&1)
-fi
+case "$mode" in
+    staged) gate_options=() ;;
+    all) gate_options=(--include-unstaged) ;;
+    include) gate_options=(--include-unstaged) ;;
+    only) gate_options=(--include-unstaged --only) ;;
+    *)
+        printf 'laravel-kit: unexpected commit mode %s, so the commit gate did not run.\n' "$mode" >&2
+        exit 1
+        ;;
+esac
+
+# Bash 3.2 treats "${empty[@]}" as unset under set -u, hence the ${x+...} forms.
+output=$("$KIT_ROOT/scripts/fast-gate.sh" ${gate_options[@]+"${gate_options[@]}"} "$directory" -- ${pathspecs[@]+"${pathspecs[@]}"} 2>&1)
 gate_status=$?
 
 if [ "$gate_status" -eq 0 ]; then

@@ -18,7 +18,7 @@ final readonly class CommitDetector
     private const array COMMIT_OPTIONS_WITH_VALUE = [
         '-m', '--message', '-F', '--file', '-C', '--reuse-message', '-c', '--reedit-message',
         '-t', '--template', '--author', '--date', '--fixup', '--squash', '--cleanup',
-        '--trailer', '--pathspec-from-file',
+        '--trailer',
     ];
 
     /** commit short options that take a value, attached (-mfix) or as the next word. */
@@ -113,34 +113,43 @@ final readonly class CommitDetector
                 return null;
             }
 
-            return new CommitCommand(
-                directory: $workTree ?? $this->workTreeOf($gitDir) ?? $directory,
-                includesUnstaged: $this->includesUnstaged(array_slice($arguments, $i + 1)),
-            );
+            return $this->readCommit(array_slice($arguments, $i + 1), $workTree ?? $this->workTreeOf($gitDir) ?? $directory);
         }
 
         return null;
     }
 
     /**
-     * True when the commit takes content straight from the working tree:
-     * `-a`/`--all`, `--include`/`--only`, or pathspecs.
+     * Works out which content the commit takes: the index alone, or also
+     * working-tree changes, from `-a`/`--all`, `--include`/`--only`,
+     * `--pathspec-from-file` or pathspecs. Pathspecs the hook cannot read
+     * as written (a variable, a substitution) count as "every change".
      *
      * @param  list<string>  $arguments  words after `commit`
      */
-    private function includesUnstaged(array $arguments): bool
+    private function readCommit(array $arguments, string $directory): CommitCommand
     {
         $count = count($arguments);
+        $all = false;
+        $include = false;
+        $only = false;
+        $pathsUnknown = false;
+        $pathspecs = [];
 
         for ($i = 0; $i < $count; $i++) {
             $argument = $arguments[$i];
 
             if ($argument === '--') {
-                return $i + 1 < $count;
+                array_push($pathspecs, ...array_slice($arguments, $i + 1));
+
+                break;
             }
 
-            if (in_array($argument, ['--all', '--include', '--only'], true)) {
-                return true;
+            if ($argument === '--pathspec-from-file' || str_starts_with($argument, '--pathspec-from-file=')) {
+                $pathsUnknown = true;
+                $i += $argument === '--pathspec-from-file' ? 1 : 0;
+
+                continue;
             }
 
             if (in_array($argument, self::COMMIT_OPTIONS_WITH_VALUE, true)) {
@@ -150,15 +159,18 @@ final readonly class CommitDetector
             }
 
             if (str_starts_with($argument, '--')) {
+                $all = $all || $argument === '--all';
+                $include = $include || $argument === '--include';
+                $only = $only || $argument === '--only';
+
                 continue;
             }
 
             if (str_starts_with($argument, '-') && strlen($argument) > 1) {
-                [$takesWorkingTree, $valueFollows] = $this->readShortCluster(substr($argument, 1));
-
-                if ($takesWorkingTree) {
-                    return true;
-                }
+                [$flags, $valueFollows] = $this->readShortCluster(substr($argument, 1));
+                $all = $all || str_contains($flags, 'a');
+                $include = $include || str_contains($flags, 'i');
+                $only = $only || str_contains($flags, 'o');
 
                 if ($valueFollows) {
                     $i++;
@@ -167,33 +179,49 @@ final readonly class CommitDetector
                 continue;
             }
 
-            return true;
+            $pathspecs[] = $argument;
         }
 
-        return false;
+        foreach ($pathspecs as $pathspec) {
+            $pathsUnknown = $pathsUnknown || preg_match('/[$`\n]/', $pathspec) === 1;
+        }
+
+        if ($pathsUnknown || $all || ($pathspecs === [] && ($include || $only))) {
+            return new CommitCommand($directory, includesUnstaged: true);
+        }
+
+        if ($pathspecs === []) {
+            return new CommitCommand($directory, includesUnstaged: false);
+        }
+
+        return new CommitCommand($directory, includesUnstaged: true, pathspecs: $pathspecs, onlyPathspecs: ! $include);
     }
 
     /**
-     * Reads a cluster such as `am` from `-am`. Returns whether it holds
-     * -a, -i or -o, and whether its last option takes the next word as value.
+     * Reads a cluster such as `am` from `-am`. Returns which of -a, -i and -o
+     * it holds, and whether its last option takes the next word as value.
+     * Anything after a value-taking option is that option's value (`-mfix`).
      *
-     * @return array{bool, bool}
+     * @return array{string, bool}
      */
     private function readShortCluster(string $cluster): array
     {
         $length = strlen($cluster);
+        $flags = '';
 
         for ($i = 0; $i < $length; $i++) {
             if (in_array($cluster[$i], ['a', 'i', 'o'], true)) {
-                return [true, false];
+                $flags .= $cluster[$i];
+
+                continue;
             }
 
             if (str_contains(self::SHORT_WITH_VALUE, $cluster[$i])) {
-                return [false, $i === $length - 1];
+                return [$flags, $i === $length - 1];
             }
         }
 
-        return [false, false];
+        return [$flags, false];
     }
 
     /**

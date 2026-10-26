@@ -117,6 +117,25 @@ it('checks unstaged changes for commit -a', function (): void {
         ->and(hook($repository, 'git commit -am x')->getExitCode())->toBe(2);
 });
 
+it('checks only the paths a commit names', function (): void {
+    $repository = FixtureRepository::create();
+    $repository->write('routes/web.php', $repository->read('routes/web.php')."// More routes.\n");
+    $repository->write('app/Greeter.php', BAD_STYLE);
+
+    expect(hook($repository, 'git commit -m x routes/web.php')->getExitCode())->toBe(0)
+        ->and(hook($repository, 'git commit -m x app/Greeter.php')->getExitCode())->toBe(2)
+        ->and(hook($repository, 'git commit -m x Greeter.php', $repository->path.'/app')->getExitCode())->toBe(2)
+        ->and(hook($repository, 'git commit -m x ../routes/web.php', $repository->path.'/app')->getExitCode())->toBe(0);
+});
+
+it('checks every unstaged change when it cannot tell which paths a commit names', function (): void {
+    $repository = FixtureRepository::create();
+    $repository->write('app/Greeter.php', BAD_STYLE);
+
+    expect(hook($repository, 'git commit -m x --pathspec-from-file=paths.txt')->getExitCode())->toBe(2)
+        ->and(hook($repository, 'git commit -m x "$FILE"')->getExitCode())->toBe(2);
+});
+
 it('can be switched off for a session or per repository', function (): void {
     $repository = FixtureRepository::create();
     $repository->write('app/Greeter.php', BAD_STYLE);

@@ -2,9 +2,13 @@
 #
 # The fast gate: Pint (--test) and PHPStan on the PHP files a commit touches.
 #
-# Usage: fast-gate.sh [--include-unstaged] [directory]
+# Usage: fast-gate.sh [--include-unstaged] [--only] [directory] [-- pathspec...]
 #   --include-unstaged  also check tracked files changed in the working tree,
 #                       for `git commit -a` and commits that name paths.
+#   --only              leave out staged files outside the pathspecs, as a
+#                       commit that names paths does (git commit --only).
+#   pathspecs           limit the working-tree files (and, with --only, the
+#                       staged ones) to these paths, relative to directory.
 # Exit codes: 0 passed or nothing to check, 1 a check failed, 2 usage or
 # configuration error.
 
@@ -15,13 +19,21 @@ KIT_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 . "$KIT_ROOT/scripts/lib.sh"
 
 include_unstaged=0
+only_pathspecs=0
 directory=.
+pathspecs=()
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --include-unstaged) include_unstaged=1 ;;
+        --only) only_pathspecs=1 ;;
+        --)
+            shift
+            pathspecs=("$@")
+            break
+            ;;
         -h | --help)
-            sed -n '3,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+            sed -n '3,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         -*)
@@ -33,10 +45,18 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+if [ "$only_pathspecs" -eq 1 ] && [ "${#pathspecs[@]}" -eq 0 ]; then
+    printf 'fast-gate: --only needs pathspecs after --\n' >&2
+    exit 2
+fi
+
 if ! root=$(git -C "$directory" rev-parse --show-toplevel 2>/dev/null); then
     printf 'fast-gate: %s is not inside a git repository\n' "$directory" >&2
     exit 2
 fi
+# Pathspecs are relative to the directory the commit runs in, so the diffs
+# run there; git prints the paths relative to the repository root.
+directory=$(cd "$directory" && pwd) || exit 2
 cd "$root" || exit 2
 lk_load_config "$root" || exit 2
 
@@ -56,9 +76,23 @@ add_files() {
     done
 }
 
-add_files < <(git diff --cached --name-only -z --diff-filter=ACMR --no-renames)
-if [ "$include_unstaged" -eq 1 ]; then
-    add_files < <(git diff --name-only -z --diff-filter=ACMR --no-renames)
+# changed_files staged|unstaged [pathspec...]: NUL-separated paths from the root.
+changed_files() {
+    local cached=
+    [ "$1" = staged ] && cached=--cached
+    shift
+    git -C "$directory" diff $cached --name-only -z --diff-filter=ACMR --no-renames -- "$@"
+}
+
+if [ "$only_pathspecs" -eq 1 ]; then
+    add_files < <(changed_files staged "${pathspecs[@]}")
+else
+    add_files < <(changed_files staged)
+fi
+if [ "$include_unstaged" -eq 1 ] && [ "${#pathspecs[@]}" -gt 0 ]; then
+    add_files < <(changed_files unstaged "${pathspecs[@]}")
+elif [ "$include_unstaged" -eq 1 ]; then
+    add_files < <(changed_files unstaged)
 fi
 
 if [ "${#files[@]}" -eq 0 ]; then

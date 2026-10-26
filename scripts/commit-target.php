@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 /*
  * Reads a PreToolUse payload on stdin. When the Bash command runs
- * `git commit`, prints the directory it runs in and, on a second line, 1 if
- * the commit also takes unstaged changes (else 0). Prints nothing otherwise.
+ * `git commit`, prints the directory it runs in, then on a second line which
+ * files to check (staged, all, only or include; see CommitCommand::mode()),
+ * then one line per pathspec the commit names. Prints nothing otherwise.
  */
 
 use OffsetSmoker\LaravelKit\Hook\CommitDetector;
@@ -27,4 +28,4 @@ if ($commit === null) {
     exit(0);
 }
 
-fwrite(STDOUT, $commit->directory."\n".($commit->includesUnstaged ? '1' : '0')."\n");
+fwrite(STDOUT, implode("\n", [$commit->directory, $commit->mode(), ...$commit->pathspecs])."\n");

@@ -60,8 +60,12 @@ repository the commit is for (following `cd` and `pushd` with their options,
 - `vendor/bin/pint --test` on the PHP files in the commit
 - `vendor/bin/phpstan analyse` on the same files, with your `phpstan.neon`
 
-The files are the staged ones, plus unstaged tracked changes when the commit
-uses `-a`, `--include`, `--only` or names paths. When a check fails, the hook
+The files are the ones the commit records: the staged ones; with `-a`, every
+changed tracked file; with paths (`git commit app/Foo.php`, or `--only`), just
+those paths, since git then leaves other staged changes out; with
+`--include` and paths, the staged files plus those paths. When the hook
+cannot read the paths as written (`--pathspec-from-file`, a variable), it
+checks every changed tracked file. When a check fails, the hook
 exits 2, Claude Code cancels the commit, and Claude receives the tool output
 with this note:
 

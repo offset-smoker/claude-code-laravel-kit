@@ -69,6 +69,34 @@ it('checks only staged files unless asked to include unstaged ones', function ()
         ->and($withUnstaged->getOutput())->toContain('FAIL phpstan');
 });
 
+it('limits the check to the paths a commit names', function (): void {
+    $repository = FixtureRepository::create();
+    $repository->write('app/Greeter.php', TYPE_ERROR);
+    $repository->write('routes/web.php', $repository->read('routes/web.php')."// More routes.\n");
+
+    $greeter = $repository->runScript('fast-gate.sh', ['--include-unstaged', '.', '--', 'app/Greeter.php']);
+    $routes = $repository->runScript('fast-gate.sh', ['--include-unstaged', '.', '--', 'routes/web.php']);
+    $fromSubdirectory = $repository->runScript('fast-gate.sh', ['--include-unstaged', 'app', '--', 'Greeter.php']);
+
+    expect($greeter->getExitCode())->toBe(1)
+        ->and($routes->getExitCode())->toBe(0)
+        ->and($routes->getOutput())->toContain('checking 1 PHP file(s)')
+        ->and($fromSubdirectory->getExitCode())->toBe(1);
+});
+
+it('leaves out staged files outside the named paths for an --only commit', function (): void {
+    $repository = FixtureRepository::create();
+    $repository->write('app/Greeter.php', TYPE_ERROR);
+    $repository->stage('app/Greeter.php');
+    $repository->write('routes/web.php', $repository->read('routes/web.php')."// More routes.\n");
+
+    $only = $repository->runScript('fast-gate.sh', ['--include-unstaged', '--only', '.', '--', 'routes/web.php']);
+    $include = $repository->runScript('fast-gate.sh', ['--include-unstaged', '.', '--', 'routes/web.php']);
+
+    expect($only->getExitCode())->toBe(0)
+        ->and($include->getExitCode())->toBe(1);
+});
+
 it('skips the checks named in FAST_GATE_SKIP', function (): void {
     $repository = FixtureRepository::create();
     $repository->writeConfig([

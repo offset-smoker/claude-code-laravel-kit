@@ -57,6 +57,25 @@ it('finds the commit and where it runs', function (string $command, string $dire
         ->and($commit?->includesUnstaged)->toBe($includesUnstaged);
 })->with('commits');
 
+it('records the paths a commit names', function (string $command, bool $includesUnstaged, array $pathspecs, bool $onlyPathspecs): void {
+    $commit = (new CommitDetector('/home/dev'))->detect($command, '/repo');
+
+    expect($commit?->includesUnstaged)->toBe($includesUnstaged)
+        ->and($commit?->pathspecs)->toBe($pathspecs)
+        ->and($commit?->onlyPathspecs)->toBe($onlyPathspecs);
+})->with([
+    'staged only' => ['git commit -m x', false, [], false],
+    '-a' => ['git commit -am x', true, [], false],
+    'paths' => ['git commit -m x app/Foo.php app/Bar.php', true, ['app/Foo.php', 'app/Bar.php'], true],
+    'paths after --' => ['git commit -m x -- -odd.php', true, ['-odd.php'], true],
+    '--only' => ['git commit --only app/Foo.php -m x', true, ['app/Foo.php'], true],
+    '--include' => ['git commit --include app/Foo.php -m x', true, ['app/Foo.php'], false],
+    '-i' => ['git commit -i -m x app/Foo.php', true, ['app/Foo.php'], false],
+    'pathspec file' => ['git commit --pathspec-from-file=paths.txt -m x', true, [], false],
+    'pathspec file, separate' => ['git commit --pathspec-from-file paths.txt -m x', true, [], false],
+    'variable path' => ['git commit -m x "$FILE"', true, [], false],
+]);
+
 it('ignores commands that do not commit', function (string $command): void {
     expect((new CommitDetector('/home/dev'))->detect($command, '/repo'))->toBeNull();
 })->with([

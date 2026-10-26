@@ -89,7 +89,7 @@ which checks only the lines the change adds:
 | `unlocked-livewire-id` | a public Livewire property holding an id without `#[Locked]` |
 | `raw-sql` | `DB::select`, `DB::statement`, `whereRaw` and friends with an interpolated or concatenated value |
 | `env-outside-config` | `env()` anywhere but `config/` |
-| `secret` | private keys, cloud and API tokens, literal passwords, and staged `.env` or key files. The value is never printed |
+| `secret` | private keys, cloud and API tokens, literal passwords, and staged `.env` or key files (`id_rsa`, `oauth-private.key`, binary `.p12`/`.pfx` stores; a `.pem` only when it holds a private key). The value is never printed, and neither is any other finding's copy of that line |
 | `debug-call` | `dd()`, `dump()`, `ray()`, `var_dump()` |
 | `tests-not-touched` | code under `app/` changed with nothing under `tests/` |
 

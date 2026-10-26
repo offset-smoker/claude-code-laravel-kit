@@ -146,7 +146,14 @@ describe('secrets', function (): void {
 
         expect($findings)->toHaveCount(1)
             ->and($findings[0]->line)->toBeNull();
-    })->with(['.env', '.env.production', 'deploy/.env.local', 'storage/oauth-private.key', 'certs/server.pem']);
+    })->with(['.env', '.env.production', 'deploy/.env.local', 'storage/oauth-private.key', 'certs/client.p12']);
+
+    it('judges a .pem file by what it holds, not by its name', function (string $contents, array $expected): void {
+        expect(rulesHit(new Secrets, newFile('certs/server.pem', $contents)))->toBe($expected);
+    })->with([
+        'public certificate' => ["-----BEGIN CERTIFICATE-----\nMIIBszCCAVmgAwIBAgIU\n-----END CERTIFICATE-----", []],
+        'private key' => ["-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG\n-----END PRIVATE KEY-----", ['secret@1']],
+    ]);
 
     it('allows examples, env lookups and test passwords', function (string $path, string $line): void {
         expect((new Secrets)->check(newFile($path, $line)))->toBe([]);

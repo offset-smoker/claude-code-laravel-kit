@@ -33,7 +33,7 @@ final class Secrets implements Rule
 
     public function check(StagedFile $file): array
     {
-        $fileFinding = $this->checkPath($file);
+        $fileFinding = self::checkPath($file->path);
 
         if ($fileFinding !== null) {
             return [$fileFinding];
@@ -60,16 +60,20 @@ final class Secrets implements Rule
         return $findings;
     }
 
-    private function checkPath(StagedFile $file): ?Finding
+    /**
+     * Flags environment and key files by name. A .pem file is judged by its
+     * contents instead, because most of them are public certificates.
+     */
+    public static function checkPath(string $path): ?Finding
     {
-        $name = basename($file->path);
+        $name = basename($path);
 
         $isEnvFile = $name === '.env'
             || (str_starts_with($name, '.env.') && ! str_ends_with($name, '.example'));
 
         $isKeyFile = in_array($name, ['oauth-private.key', 'id_rsa', 'id_ed25519', 'id_ecdsa'], true)
-            || str_ends_with($name, '.pem')
-            || str_ends_with($name, '.p12');
+            || str_ends_with($name, '.p12')
+            || str_ends_with($name, '.pfx');
 
         if (! $isEnvFile && ! $isKeyFile) {
             return null;
@@ -80,7 +84,7 @@ final class Secrets implements Rule
             message: $isEnvFile
                 ? 'An environment file is staged. Unstage it and add it to .gitignore.'
                 : 'A private key file is staged. Unstage it, add it to .gitignore and rotate the key.',
-            path: $file->path,
+            path: $path,
         );
     }
 }

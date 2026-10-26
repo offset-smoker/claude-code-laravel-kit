@@ -37,11 +37,20 @@ final readonly class Scanner
 
     /**
      * @param  list<StagedFile>  $files
+     * @param  list<string>  $binaryPaths  staged binary files, checked by name only
      * @return list<Finding>
      */
-    public function scan(array $files): array
+    public function scan(array $files, array $binaryPaths = []): array
     {
         $findings = [];
+
+        foreach ($binaryPaths as $path) {
+            $finding = Secrets::checkPath($path);
+
+            if ($finding !== null) {
+                $findings[] = $finding;
+            }
+        }
 
         foreach ($files as $file) {
             foreach ($this->rules as $rule) {

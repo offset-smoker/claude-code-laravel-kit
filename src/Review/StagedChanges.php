@@ -11,19 +11,24 @@ final readonly class StagedChanges
     public function __construct(private Git $git) {}
 
     /**
-     * Staged text files, read from the index rather than the working tree,
-     * so the review sees exactly what the commit will contain.
+     * Staged files, read from the index rather than the working tree, so the
+     * review sees exactly what the commit will contain. Text files come back
+     * whole; binary files only by path, for the rules that judge a file by
+     * its name.
      *
-     * @return list<StagedFile>
+     * @return array{list<StagedFile>, list<string>} text files, binary paths
      */
-    public function files(): array
+    public function read(): array
     {
         $files = [];
+        $binaryPaths = [];
 
         foreach ($this->git->stagedFiles() as $path) {
             $contents = $this->git->stagedContents($path);
 
             if (str_contains($contents, "\0")) {
+                $binaryPaths[] = $path;
+
                 continue;
             }
 
@@ -34,6 +39,6 @@ final readonly class StagedChanges
             );
         }
 
-        return $files;
+        return [$files, $binaryPaths];
     }
 }

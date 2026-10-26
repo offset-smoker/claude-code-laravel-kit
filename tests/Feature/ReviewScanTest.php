@@ -162,6 +162,18 @@ it('skips binary files', function (): void {
         ->and($process->getOutput())->toContain('0 staged text files scanned, no findings');
 });
 
+it('flags a staged binary key store by its name', function (): void {
+    $repository = FixtureRepository::create();
+    $repository->write('certs/client.p12', "0\x82\x0a\x01\x02\x01\x030\0\0\x06\x09*\x86H");
+    $repository->stage('certs/client.p12');
+
+    $process = $repository->runScript('review-scan.php');
+
+    expect($process->getExitCode())->toBe(1)
+        ->and($process->getOutput())->toContain('certs/client.p12 [secret] A private key file is staged')
+        ->toContain('0 staged text files scanned, 1 finding.');
+});
+
 it('exits 2 outside a repository or with bad arguments', function (array $arguments): void {
     $process = FixtureRepository::runKitScript('review-scan.php', $arguments, FixtureRepository::plainDirectory());
 

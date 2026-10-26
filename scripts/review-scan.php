@@ -40,13 +40,13 @@ if (! in_array($format, ['text', 'json'], true) || ! is_string($directory)) {
 }
 
 try {
-    $files = (new StagedChanges(Git::discover($directory)))->files();
+    [$files, $binaryPaths] = (new StagedChanges(Git::discover($directory)))->read();
 } catch (RuntimeException $exception) {
     fwrite(STDERR, "laravel-kit review scan: {$exception->getMessage()}\n");
     exit(2);
 }
 
-$findings = Scanner::default()->scan($files);
+$findings = Scanner::default()->scan($files, $binaryPaths);
 
 fwrite(STDOUT, $format === 'json' ? Report::json($findings, count($files)) : Report::text($findings, count($files)));
 

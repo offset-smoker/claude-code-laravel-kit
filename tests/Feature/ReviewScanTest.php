@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use OffsetSmoker\LaravelKit\Tests\Support\FixtureRepository;
 
+const LEAKED_TOKEN = 'sk-ant-api03-ZqT8vW2nR5yL0pK7mX3cB9hJ4dF6gS1a';
+
 const RISKY_CONTROLLER = <<<'PHP'
     <?php
 
@@ -82,6 +84,39 @@ it('never prints a secret it finds', function (): void {
         ->toContain('.env [secret] An environment file is staged')
         ->not->toContain($key)
         ->and($json->getOutput())->not->toContain($key);
+});
+
+it('never prints a secret that shares a line with another finding', function (string $line, string $otherRule, string $secret): void {
+    $repository = FixtureRepository::create();
+    $repository->write('app/Http/Controllers/KeyController.php', "<?php\n\nfinal class KeyController extends Controller\n{\n    public function store(Request \$request): void\n    {\n        {$line}\n    }\n}\n");
+    $repository->stage('app/Http/Controllers/KeyController.php');
+
+    $text = $repository->runScript('review-scan.php');
+    $json = $repository->runScript('review-scan.php', ['--format=json']);
+
+    expect($text->getOutput())->toContain('KeyController.php:7 [secret]')
+        ->toContain("KeyController.php:7 [{$otherRule}]")
+        ->not->toContain($secret)
+        ->and($json->getOutput())->toContain("\"rule\": \"{$otherRule}\"")
+        ->not->toContain($secret);
+})->with([
+    'env() default' => ["\$key = env('ANTHROPIC_KEY', '".LEAKED_TOKEN."');", 'env-outside-config', LEAKED_TOKEN],
+    'debug call' => ["dump('".LEAKED_TOKEN."');", 'debug-call', LEAKED_TOKEN],
+    'raw SQL' => ["DB::statement(\"update keys set value = '".LEAKED_TOKEN."' where id = {\$request->id}\");", 'raw-sql', LEAKED_TOKEN],
+    'mass assignment' => ["Key::create(\$request->all() + ['token' => '".LEAKED_TOKEN."']);", 'mass-assignment', LEAKED_TOKEN],
+    'literal password beside env()' => ["\$db = ['password' => 'hunter2-but-longer', 'host' => env('DB_HOST')];", 'env-outside-config', 'hunter2-but-longer'],
+]);
+
+it('prints no line from a staged environment file', function (): void {
+    $repository = FixtureRepository::create();
+    $repository->write('config/.env.php', "<?php\n\ndump('plain-value-1234');\n");
+    $repository->stage('config/.env.php');
+
+    $output = $repository->runScript('review-scan.php')->getOutput();
+
+    expect($output)->toContain('config/.env.php [secret]')
+        ->toContain('config/.env.php:3 [debug-call]')
+        ->not->toContain('plain-value-1234');
 });
 
 it('prints JSON when asked', function (): void {

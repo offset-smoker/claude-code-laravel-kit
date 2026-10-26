@@ -49,6 +49,8 @@ final readonly class Scanner
             }
         }
 
+        $findings = $this->withholdSecretLines($findings);
+
         $changeSet = $this->testsTouched->check($files);
 
         if ($changeSet !== null) {
@@ -56,5 +58,40 @@ final readonly class Scanner
         }
 
         return $findings;
+    }
+
+    /**
+     * A line the secret rule flagged is never printed, whichever rule reports
+     * it, and nothing at all is printed from a staged environment or key file.
+     *
+     * @param  list<Finding>  $findings
+     * @return list<Finding>
+     */
+    private function withholdSecretLines(array $findings): array
+    {
+        $secretFiles = [];
+        $secretLines = [];
+
+        foreach ($findings as $finding) {
+            if ($finding->rule !== Secrets::RULE || $finding->path === null) {
+                continue;
+            }
+
+            if ($finding->line === null) {
+                $secretFiles[$finding->path] = true;
+
+                continue;
+            }
+
+            $secretLines["{$finding->path}:{$finding->line}"] = true;
+        }
+
+        return array_map(
+            static fn (Finding $finding): Finding => $finding->snippet !== null
+                && (isset($secretFiles[$finding->path ?? '']) || isset($secretLines[$finding->location()]))
+                    ? $finding->withoutSnippet()
+                    : $finding,
+            $findings,
+        );
     }
 }

@@ -28,6 +28,11 @@ final readonly class Finding
         );
     }
 
+    public function withoutSnippet(): self
+    {
+        return new self($this->rule, $this->message, $this->path, $this->line);
+    }
+
     public function location(): string
     {
         if ($this->path === null) {

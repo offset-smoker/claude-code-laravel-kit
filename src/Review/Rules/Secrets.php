@@ -10,10 +10,13 @@ use OffsetSmoker\LaravelKit\Review\StagedFile;
 
 /**
  * Flags credentials in the change. Findings never carry the offending line,
+ * and the Scanner withholds that line from every other rule's findings too,
  * so the report cannot leak the secret it found.
  */
 final class Secrets implements Rule
 {
+    public const string RULE = 'secret';
+
     /** @var array<string, string> pattern => what it looks like */
     private const array TOKENS = [
         '/-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----/' => 'a private key',
@@ -43,14 +46,14 @@ final class Secrets implements Rule
 
             foreach (self::TOKENS as $pattern => $description) {
                 if (preg_match($pattern, $line) === 1) {
-                    $findings[] = Finding::at('secret', $file, $number, "This line looks like it contains {$description}. The value is not shown here. Remove it, rotate it, and read it from the environment through config.", withSnippet: false);
+                    $findings[] = Finding::at(self::RULE, $file, $number, "This line looks like it contains {$description}. The value is not shown here. Remove it, rotate it, and read it from the environment through config.", withSnippet: false);
 
                     continue 2;
                 }
             }
 
             if (! $file->isTestCode() && ! str_ends_with($file->path, '.example') && preg_match(self::ASSIGNED_LITERAL, $line) === 1) {
-                $findings[] = Finding::at('secret', $file, $number, 'A credential-like key is assigned a literal value. The value is not shown here. If it is real, move it to the environment and rotate it.', withSnippet: false);
+                $findings[] = Finding::at(self::RULE, $file, $number, 'A credential-like key is assigned a literal value. The value is not shown here. If it is real, move it to the environment and rotate it.', withSnippet: false);
             }
         }
 
@@ -73,7 +76,7 @@ final class Secrets implements Rule
         }
 
         return new Finding(
-            rule: 'secret',
+            rule: self::RULE,
             message: $isEnvFile
                 ? 'An environment file is staged. Unstage it and add it to .gitignore.'
                 : 'A private key file is staged. Unstage it, add it to .gitignore and rotate the key.',

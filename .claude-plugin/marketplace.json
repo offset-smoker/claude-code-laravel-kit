@@ -1,0 +1,17 @@
+{
+  "name": "offset-smoker",
+  "description": "Claude Code plugins by Brandon Wagner.",
+  "owner": {
+    "name": "Brandon Wagner",
+    "email": "b@wagner.codes"
+  },
+  "plugins": [
+    {
+      "name": "laravel-kit",
+      "source": "./",
+      "description": "Staged-change review, pre-push deploy check and a Pint/PHPStan commit gate for Laravel repositories.",
+      "category": "development",
+      "tags": ["laravel", "php", "review", "ci"]
+    }
+  ]
+}

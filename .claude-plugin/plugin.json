@@ -1,0 +1,14 @@
+{
+  "name": "laravel-kit",
+  "displayName": "Laravel Kit",
+  "version": "0.1.0",
+  "description": "Gates for Laravel teams working with Claude Code: a staged-change review, a pre-push deploy check, and a commit hook that blocks commits failing Pint or PHPStan.",
+  "author": {
+    "name": "Brandon Wagner",
+    "email": "b@wagner.codes"
+  },
+  "homepage": "https://github.com/offset-smoker/claude-code-laravel-kit",
+  "repository": "https://github.com/offset-smoker/claude-code-laravel-kit",
+  "license": "MIT",
+  "keywords": ["laravel", "php", "code-review", "pre-commit", "deploy", "pint", "phpstan", "larastan"]
+}

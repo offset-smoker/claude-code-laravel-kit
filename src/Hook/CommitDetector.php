@@ -6,7 +6,8 @@ namespace OffsetSmoker\LaravelKit\Hook;
 
 /**
  * Finds the first `git commit` in a Bash tool command and works out which
- * directory it runs in, following `cd`, `pushd` and `git -C`.
+ * directory it runs in, following `cd`, `pushd`, `git -C`, `--git-dir` and
+ * `--work-tree`.
  */
 final readonly class CommitDetector
 {
@@ -23,8 +24,17 @@ final readonly class CommitDetector
     /** commit short options that take a value, attached (-mfix) or as the next word. */
     private const string SHORT_WITH_VALUE = 'mFCct';
 
-    /** Words that run the rest of the command line as a command. */
-    private const array WRAPPERS = ['env', 'command', 'builtin', 'exec', 'nohup', 'time', 'nice'];
+    /** Words that run the rest of the command line as a command, with their options that take a separate value. */
+    private const array WRAPPERS = [
+        'env' => ['-u', '--unset', '-C', '--chdir', '-S', '--split-string'],
+        'sudo' => ['-u', '--user', '-g', '--group', '-h', '--host', '-p', '--prompt', '-C', '--close-from', '-D', '--chdir', '-r', '--role', '-t', '--type', '-T', '--command-timeout', '-U', '--other-user'],
+        'command' => [],
+        'builtin' => [],
+        'exec' => ['-a'],
+        'nohup' => [],
+        'time' => ['-f', '--format', '-o', '--output'],
+        'nice' => ['-n', '--adjustment'],
+    ];
 
     public function __construct(private string $home = '') {}
 
@@ -40,7 +50,7 @@ final readonly class CommitDetector
             }
 
             if (in_array($words[0], ['cd', 'pushd'], true)) {
-                $directory = $this->resolve($directory, $words[1] ?? ($this->home !== '' ? $this->home : $directory));
+                $directory = $this->changeDirectory($words, $directory);
 
                 continue;
             }
@@ -65,6 +75,8 @@ final readonly class CommitDetector
     private function parseGit(array $arguments, string $directory): ?CommitCommand
     {
         $count = count($arguments);
+        $workTree = null;
+        $gitDir = null;
 
         for ($i = 0; $i < $count; $i++) {
             $argument = $arguments[$i];
@@ -75,14 +87,14 @@ final readonly class CommitDetector
                 continue;
             }
 
-            if (str_starts_with($argument, '--work-tree=')) {
-                $directory = $this->resolve($directory, substr($argument, strlen('--work-tree=')));
+            if (str_starts_with($argument, '--work-tree=') || $argument === '--work-tree') {
+                $workTree = $this->resolve($directory, $this->optionValue($argument, $arguments, $i));
 
                 continue;
             }
 
-            if ($argument === '--work-tree') {
-                $directory = $this->resolve($directory, $arguments[++$i] ?? '.');
+            if (str_starts_with($argument, '--git-dir=') || $argument === '--git-dir') {
+                $gitDir = $this->resolve($directory, $this->optionValue($argument, $arguments, $i));
 
                 continue;
             }
@@ -102,7 +114,7 @@ final readonly class CommitDetector
             }
 
             return new CommitCommand(
-                directory: $directory,
+                directory: $workTree ?? $this->workTreeOf($gitDir) ?? $directory,
                 includesUnstaged: $this->includesUnstaged(array_slice($arguments, $i + 1)),
             );
         }
@@ -185,21 +197,116 @@ final readonly class CommitDetector
     }
 
     /**
+     * The value of `--name=value`, or of `--name value` (advancing $i past it).
+     *
+     * @param  list<string>  $arguments
+     */
+    private function optionValue(string $argument, array $arguments, int &$i): string
+    {
+        $equals = strpos($argument, '=');
+
+        if ($equals !== false) {
+            return substr($argument, $equals + 1);
+        }
+
+        return $arguments[++$i] ?? '.';
+    }
+
+    /**
+     * The work tree git uses for a `.git` directory given with --git-dir.
+     * Any other git directory (a bare repository, say) has no work tree to
+     * find, so the directory is left as it was.
+     */
+    private function workTreeOf(?string $gitDir): ?string
+    {
+        if ($gitDir === null || basename(rtrim($gitDir, '/')) !== '.git') {
+            return null;
+        }
+
+        return dirname(rtrim($gitDir, '/'));
+    }
+
+    /**
+     * Follows `cd` or `pushd`, skipping their options: -L, -P, -e and -@,
+     * `--`, and pushd's -n, which leaves the directory unchanged.
+     *
+     * @param  non-empty-list<string>  $words
+     */
+    private function changeDirectory(array $words, string $directory): string
+    {
+        $count = count($words);
+
+        for ($i = 1; $i < $count; $i++) {
+            $word = $words[$i];
+
+            if ($word === '--') {
+                return $this->resolve($directory, $words[$i + 1] ?? $this->homeOr($directory));
+            }
+
+            if ($words[0] === 'pushd' && $word === '-n') {
+                return $directory;
+            }
+
+            if (preg_match('/^-[LPe@]+$/', $word) === 1) {
+                continue;
+            }
+
+            return $this->resolve($directory, $word);
+        }
+
+        return $this->resolve($directory, $this->homeOr($directory));
+    }
+
+    private function homeOr(string $directory): string
+    {
+        return $this->home !== '' ? $this->home : $directory;
+    }
+
+    /**
+     * Drops leading variable assignments and wrappers such as `env`, `sudo`
+     * or `nice -n 10`, with the wrapper's own options.
+     *
      * @param  list<string>  $words
      * @return list<string>
      */
     private function stripPrefix(array $words): array
     {
         while ($words !== []) {
-            $first = $words[0];
+            $first = array_shift($words);
 
-            if (preg_match('/^[A-Za-z_]\w*=/', $first) === 1 || in_array($first, self::WRAPPERS, true)) {
-                array_shift($words);
-
+            if (preg_match('/^[A-Za-z_]\w*=/', $first) === 1) {
                 continue;
             }
 
-            break;
+            if (! array_key_exists($first, self::WRAPPERS)) {
+                array_unshift($words, $first);
+
+                break;
+            }
+
+            $words = $this->stripWrapperOptions($words, self::WRAPPERS[$first]);
+        }
+
+        return $words;
+    }
+
+    /**
+     * @param  list<string>  $words  words after the wrapper
+     * @param  list<string>  $withValue  the wrapper's options that take a separate value
+     * @return list<string>
+     */
+    private function stripWrapperOptions(array $words, array $withValue): array
+    {
+        while ($words !== [] && str_starts_with($words[0], '-')) {
+            $option = array_shift($words);
+
+            if ($option === '--') {
+                break;
+            }
+
+            if (in_array($option, $withValue, true)) {
+                array_shift($words);
+            }
         }
 
         return $words;

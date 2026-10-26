@@ -30,6 +30,23 @@ dataset('commits', [
     'redirection' => ['git commit -m x > /dev/null 2>&1', '/repo', false],
     'heredoc message' => ["git commit -m \"\$(cat <<'EOF'\nFix it\nEOF\n)\"", '/repo', false],
     'include flag' => ['git commit -i app/Foo.php -m x', '/repo', true],
+    'cd --' => ['cd -- /abs && git commit', '/abs', false],
+    'cd -P' => ['cd -P sub && git commit', '/repo/sub', false],
+    'cd -L -P' => ['cd -L -P /abs; git commit', '/abs', false],
+    'cd -- -dash' => ['cd -- -dash && git commit', '/repo/-dash', false],
+    'cd -' => ['cd - && git commit', '/repo', false],
+    'pushd -n' => ['pushd -n /abs && git commit', '/repo', false],
+    'git-dir attached' => ['git --git-dir=/abs/.git commit -m x', '/abs', false],
+    'git-dir separate' => ['git --git-dir /abs/.git commit -m x', '/abs', false],
+    'git-dir relative' => ['git --git-dir=sub/.git commit', '/repo/sub', false],
+    'git-dir after -C' => ['git -C /abs --git-dir=.git commit', '/abs', false],
+    'git-dir with work tree' => ['git --work-tree=/wt --git-dir=/abs/.git commit', '/wt', false],
+    'sudo' => ['sudo git commit -m x', '/repo', false],
+    'sudo with user' => ['sudo -u deploy git commit -m x', '/repo', false],
+    'sudo with --' => ['sudo -E -- git commit -m x', '/repo', false],
+    'nice with value' => ['nice -n 10 git commit -m x', '/repo', false],
+    'env with option' => ['env -i PATH=/usr/bin git commit -m x', '/repo', false],
+    'time -p' => ['time -p git commit -m x', '/repo', false],
 ]);
 
 it('finds the commit and where it runs', function (string $command, string $directory, bool $includesUnstaged): void {

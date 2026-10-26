@@ -102,7 +102,11 @@ it('follows cd and git -C to the repository being committed', function (string $
     expect($process->getExitCode())->toBe(2);
 })->with([
     'cd' => ['cd %s && git commit -m x'],
+    'cd --' => ['cd -- %s && git commit -m x'],
+    'cd -P' => ['cd -P %s && git commit -m x'],
     'git -C' => ['git -C %s commit -m x'],
+    'git --git-dir' => ['git --git-dir=%s/.git commit -m x'],
+    'sudo' => ['cd %s && sudo -u nobody git commit -m x'],
 ]);
 
 it('checks unstaged changes for commit -a', function (): void {

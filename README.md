@@ -53,8 +53,9 @@ claude plugin install laravel-kit@offset-smoker --scope project
 
 A `PreToolUse` hook on the Bash tool (`hooks/hooks.json`). When Claude runs a
 command containing `git commit`, `scripts/commit-gate.sh` works out which
-repository the commit is for (following `cd`, `pushd` and `git -C`) and runs
-the fast gate there:
+repository the commit is for (following `cd` and `pushd` with their options,
+`git -C`, `--git-dir` and `--work-tree`, through wrappers such as `env`,
+`sudo` and `nice`) and runs the fast gate there:
 
 - `vendor/bin/pint --test` on the PHP files in the commit
 - `vendor/bin/phpstan analyse` on the same files, with your `phpstan.neon`
@@ -214,10 +215,13 @@ Version 0.1.0. What it does not do:
 
 - **The hook is a guard rail, not a lock.** It sees only commands Claude runs
   through the Bash tool. It finds commits by parsing the command line, so a
-  commit hidden in a script, an alias or an `eval` is not seen, and `cd`
-  into a path built from a variable is not followed (the hook then checks
-  the current directory). For a hard rule, also run the fast gate in a git
-  pre-commit hook or in CI.
+  commit hidden in a script, an alias or an `eval` is not seen. These do not
+  move the hook to another directory, so it checks the current one instead:
+  `cd` into a path built from a variable, `GIT_DIR` or `GIT_WORK_TREE` set
+  in the environment, `--git-dir` naming a directory not called `.git`, and
+  the change-directory options of wrappers (`env -C`, `sudo -D`). When that
+  directory is not a git repository, the hook lets the commit through. For a
+  hard rule, also run the fast gate in a git pre-commit hook or in CI.
 - **The fast gate checks working-tree files.** Pint and PHPStan read files
   from disk, so if a file is only partly staged, they check the whole file,
   not just the staged part.

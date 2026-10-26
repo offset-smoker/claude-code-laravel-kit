@@ -7,14 +7,16 @@ namespace OffsetSmoker\LaravelKit\Review;
 final class Lines
 {
     /**
-     * Splits text on any line break: \n, \r\n or \r.
+     * Splits text into lines the way git numbers them: on \n only, dropping
+     * the \r of a \r\n ending. A lone \r stays inside its line.
      *
      * @return list<string>
      */
     public static function split(string $text): array
     {
-        $lines = preg_split('/\R/', $text);
-
-        return $lines === false ? [] : $lines;
+        return array_map(
+            static fn (string $line): string => str_ends_with($line, "\r") ? substr($line, 0, -1) : $line,
+            explode("\n", $text),
+        );
     }
 }

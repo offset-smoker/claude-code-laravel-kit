@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use OffsetSmoker\LaravelKit\Review\HunkParser;
+use OffsetSmoker\LaravelKit\Review\Lines;
 
 it('reads added line numbers from zero-context hunks', function (): void {
     $diff = <<<'DIFF'
@@ -61,4 +62,8 @@ it('returns nothing for a diff that only deletes', function (): void {
 
 it('does not mistake file headers for added lines', function (): void {
     expect(HunkParser::addedLines("+++ b/app/Foo.php\n+not in a hunk\n"))->toBe([]);
+});
+
+it('splits lines on \\n only, as git numbers them', function (): void {
+    expect(Lines::split("one\rstill one\r\ntwo\nthree"))->toBe(["one\rstill one", 'two', 'three']);
 });

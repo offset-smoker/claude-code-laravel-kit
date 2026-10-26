@@ -162,6 +162,14 @@ it('skips binary files', function (): void {
         ->and($process->getOutput())->toContain('0 staged text files scanned, no findings');
 });
 
+it('numbers lines the way git does when a file has a stray carriage return', function (): void {
+    $repository = FixtureRepository::create();
+    $repository->write('app/Debug.php', "<?php\n// old\rmac line\ndd(1);\n");
+    $repository->stage('app/Debug.php');
+
+    expect($repository->runScript('review-scan.php')->getOutput())->toContain('app/Debug.php:3 [debug-call]');
+});
+
 it('flags a staged binary key store by its name', function (): void {
     $repository = FixtureRepository::create();
     $repository->write('certs/client.p12', "0\x82\x0a\x01\x02\x01\x030\0\0\x06\x09*\x86H");

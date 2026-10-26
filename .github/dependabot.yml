@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # Keeps the SHA-pinned actions in .github/workflows current; the version
+  # comment beside each SHA is updated with it.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dev-tools:
+        dependency-type: development

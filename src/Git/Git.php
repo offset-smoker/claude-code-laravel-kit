@@ -12,6 +12,8 @@ use RuntimeException;
  */
 final readonly class Git
 {
+    private const string SUBMODULE_MODE = '160000';
+
     public function __construct(private string $root) {}
 
     public static function discover(string $directory): self
@@ -32,14 +34,27 @@ final readonly class Git
 
     /**
      * Paths of staged files that were added, copied, modified or renamed.
+     * Submodules are left out: the index holds only their commit id, and
+     * `git show` cannot read one as a file.
      *
      * @return list<string>
      */
     public function stagedFiles(): array
     {
-        $output = $this->run(['diff', '--cached', '--name-only', '-z', '--diff-filter=ACMR', '--no-renames']);
+        $fields = explode("\0", $this->run(['diff', '--cached', '--raw', '-z', '--diff-filter=ACMR', '--no-renames']));
+        $count = count($fields);
+        $paths = [];
 
-        return array_values(array_filter(explode("\0", $output), static fn (string $path): bool => $path !== ''));
+        // -z --raw output: ":<old mode> <new mode> <old id> <new id> <status>\0<path>\0", repeated.
+        for ($i = 0; $i + 1 < $count; $i += 2) {
+            $newMode = explode(' ', $fields[$i])[1] ?? '';
+
+            if ($newMode !== self::SUBMODULE_MODE && $fields[$i + 1] !== '') {
+                $paths[] = $fields[$i + 1];
+            }
+        }
+
+        return $paths;
     }
 
     public function stagedDiff(string $path): string
@@ -57,21 +72,33 @@ final readonly class Git
      */
     public function run(array $arguments): string
     {
+        // stderr goes to a temporary file rather than a second pipe: reading
+        // one pipe to its end while git fills the other would block both.
+        $errors = tmpfile();
+
+        if ($errors === false) {
+            throw new RuntimeException('Could not create a temporary file for git errors.');
+        }
+
         $process = proc_open(
             ['git', '-C', $this->root, ...$arguments],
-            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            [1 => ['pipe', 'w'], 2 => $errors],
             $pipes,
         );
 
         if (! is_resource($process)) {
+            fclose($errors);
+
             throw new RuntimeException('Could not start git.');
         }
 
         $stdout = stream_get_contents($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
         fclose($pipes[1]);
-        fclose($pipes[2]);
         $exitCode = proc_close($process);
+
+        rewind($errors);
+        $stderr = stream_get_contents($errors);
+        fclose($errors);
 
         if ($exitCode !== 0) {
             $message = trim(is_string($stderr) ? $stderr : '');

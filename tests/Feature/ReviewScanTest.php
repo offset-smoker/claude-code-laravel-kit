@@ -170,6 +170,19 @@ it('numbers lines the way git does when a file has a stray carriage return', fun
     expect($repository->runScript('review-scan.php')->getOutput())->toContain('app/Debug.php:3 [debug-call]');
 });
 
+it('skips a staged submodule', function (): void {
+    $repository = FixtureRepository::create();
+    $repository->git('update-index', '--add', '--cacheinfo', '160000,'.str_repeat('a', 40).',packages/billing');
+    $repository->write('app/Debug.php', "<?php\n\ndd(1);\n");
+    $repository->stage('app/Debug.php');
+
+    $process = $repository->runScript('review-scan.php');
+
+    expect($process->getExitCode())->toBe(1)
+        ->and($process->getOutput())->toContain('app/Debug.php:3 [debug-call]')
+        ->toContain('1 staged text file scanned');
+});
+
 it('flags a staged binary key store by its name', function (): void {
     $repository = FixtureRepository::create();
     $repository->write('certs/client.p12', "0\x82\x0a\x01\x02\x01\x030\0\0\x06\x09*\x86H");

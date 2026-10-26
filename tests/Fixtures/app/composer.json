@@ -1,0 +1,6 @@
+{
+    "name": "fixture/app",
+    "description": "A tiny Laravel-shaped project the gate scripts are tested against.",
+    "type": "project",
+    "license": "MIT"
+}

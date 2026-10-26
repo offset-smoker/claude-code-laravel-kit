@@ -1,0 +1,51 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/*
+ * A stand-in for Laravel's artisan with just the commands the deploy check
+ * calls. route:cache fails when routes/web.php contains BROKEN_ROUTE, the way
+ * a duplicate route name or a closure breaks it in a real application.
+ */
+
+$command = $argv[1] ?? '';
+$cache = __DIR__.'/bootstrap/cache';
+
+switch ($command) {
+    case 'config:cache':
+        file_put_contents($cache.'/config.php', "<?php return [];\n");
+        echo "Configuration cached successfully.\n";
+        exit(0);
+
+    case 'route:cache':
+        if (str_contains((string) file_get_contents(__DIR__.'/routes/web.php'), 'BROKEN_ROUTE')) {
+            fwrite(STDERR, "Unable to prepare route [broken] for serialization.\n");
+            exit(1);
+        }
+
+        file_put_contents($cache.'/routes-v7.php', "<?php return [];\n");
+        echo "Routes cached successfully.\n";
+        exit(0);
+
+    case 'view:cache':
+        file_put_contents($cache.'/views.php', "<?php return [];\n");
+        echo "Blade templates cached successfully.\n";
+        exit(0);
+
+    case 'optimize:clear':
+        foreach (glob($cache.'/*.php') ?: [] as $file) {
+            unlink($file);
+        }
+
+        echo "Caches cleared successfully.\n";
+        exit(0);
+
+    case 'test':
+        passthru(escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/tests/check.php'), $status);
+        exit($status);
+
+    default:
+        fwrite(STDERR, "Command \"{$command}\" is not defined.\n");
+        exit(1);
+}
